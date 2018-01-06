@@ -1,11 +1,13 @@
 #!/usr/bin/env python2.6
 
 
-# reads memory locations written to by a Lua script running on he labjack
+# reads memory locations written to by a Lua script running on the labjack
 
 from labjack import ljm
 import time
 # Open first found LabJack
+# see https://labjack.com/support/software/api/ljm/function-reference/ljmopen
+
 handle = ljm.openS("ANY", "ANY", "ANY")
 
 # Call eReadName to read the serial number from the LabJack.
@@ -33,7 +35,7 @@ while 1:
 
     print("%i    Address - %i, value : %f" %  (counter, address, result))
 
-  result = ljm.eReadAddress(handle, 60050, 3) - 273.15  # also read internal tempearture and convert from K to C
+  result = ljm.eReadAddress(handle, 60050, 3) - 273.15  # also read internal temperature and convert from K to C
   print "--------------\n{:.1f} C\n------------\n".format(result )
   time.sleep(10)
   counter+=1
