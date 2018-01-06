@@ -9,7 +9,7 @@ rw[2003] = 46006
 local hi = {}
 local lo = {}
 i = 0
-interval = 10*1000  -- number of seconds to take readngs for
+interval = 30*1000  -- number of seconds to take readngs for
 freq = 10   --milliseconds between readings
 
 while true do

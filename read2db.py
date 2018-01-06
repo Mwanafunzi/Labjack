@@ -1,5 +1,29 @@
 #!/usr/bin/env python2.6
 
+import MySQLdb
+import time
+import MySQLdb.cursors
+import json
+
+
+db_host = "localhost"
+db_user = "root"
+db_passwd = "IceCream!"
+
+
+
+#######################################################  #####
+# connect to the MySQL server
+def connect2db():
+  global conn
+  conn = MySQLdb.connect ( host = db_host, user = db_user, passwd = db_passwd, cursorclass=MySQLdb.cursors.DictCursor)
+  conn.autocommit(True)
+############################  #############
+
+connect2db()
+cursor = conn.cursor ()
+
+
 
 # reads memory locations written to by a Lua script running on the labjack
 
@@ -10,14 +34,6 @@ import time
 
 handle = ljm.openS("ANY", "ANY", "ANY")
 
-# Call eReadName to read the serial number from the LabJack.
-name = "SERIAL_NUMBER"
-result = ljm.eReadName(handle, name)
-#result = ljm.openS("T7", "ANY", "My_T7_5741")
-result = ljm.openS("T7", "ANY", "ANY")
-
-print("\neReadName result: ")
-print("    %s = %f" % (name, result))
 
 counter = 0
 #46000
@@ -29,17 +45,27 @@ print("Opened a LabJack with Device type: %i, Connection type: %i,\n"
 
 
 while 1:
-  for address in [46000, 46002, 46004, 46006]:
+  #for address in [46000, 46002, 46004, 46006]:
+  for address in [46000, 60050]:
     # Setup and call eReadAddress to read a value from the LabJack.
     dataType = ljm.constants.UINT32
     result = ljm.eReadAddress(handle, address, 3)
+    if address == 60050:
+      result = result  - 273.15
 
     print("%i    Address - %i, value : %f" %  (counter, address, result))
 
-  result = ljm.eReadAddress(handle, 60050, 3) - 273.15  # also read internal temperature and convert from K to C
-  print "--------------\n{:.1f} C\n------------\n".format(result )
+  
+  sql = """INSERT INTO freezers.`dust` ( `device`, `reading`, `recorded`) VALUES  ({a}, {r}, NOW() ) ;""".format( a = address, r =result)
+
+  cursor.execute(sql)
+  print
   time.sleep(10)
   counter+=1
+
+
+
+
 
 
 # Close handle
