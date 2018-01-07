@@ -56,11 +56,11 @@ while 1:
     print("%i    Address - %i, value : %f" %  (counter, address, result))
 
   
-  sql = """INSERT INTO freezers.`dust` ( `device`, `reading`, `recorded`) VALUES  ({a}, {r}, NOW() ) ;""".format( a = address, r =result)
+    sql = """INSERT INTO freezers.`dust` ( `device`, `reading`, `recorded`) VALUES  ({a}, {r}, NOW() ) ;""".format( a = address, r =result)
 
-  cursor.execute(sql)
+    cursor.execute(sql)
   print
-  time.sleep(10)
+  time.sleep(10*60)
   counter+=1
 
 
