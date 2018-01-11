@@ -10,6 +10,8 @@ db_host = "localhost"
 db_user = "root"
 db_passwd = "IceCream!"
 
+sleep_time = 0.10*60
+address_list = [46000, 60050]
 
 
 #######################################################  #####
@@ -46,21 +48,24 @@ print("Opened a LabJack with Device type: %i, Connection type: %i,\n"
 
 while 1:
   #for address in [46000, 46002, 46004, 46006]:
-  for address in [46000, 60050]:
+  for address in address_list:
     # Setup and call eReadAddress to read a value from the LabJack.
     dataType = ljm.constants.UINT32
-    result = ljm.eReadAddress(handle, address, 3)
-    if address == 60050:
-      result = result  - 273.15
+    try:
+       result = ljm.eReadAddress(handle, address, 3)
+       if address == 60050:
+         result = result  - 273.15
 
-    print("%i    Address - %i, value : %f" %  (counter, address, result))
+       print("%i    Address - %i, value : %f" %  (counter, address, result))
+       sql = """INSERT INTO freezers.`sensor_readings` ( `device`, `reading`, `recorded`) VALUES  ({a}, {r}, NOW() ) ;""".format( a = address, r =result)
 
+    except:
+      print "Failed to read from LJ or write to db"
   
-    sql = """INSERT INTO freezers.`dust` ( `device`, `reading`, `recorded`) VALUES  ({a}, {r}, NOW() ) ;""".format( a = address, r =result)
 
     cursor.execute(sql)
   print
-  time.sleep(10*60)
+  time.sleep(sleep_time)
   counter+=1
 
 
