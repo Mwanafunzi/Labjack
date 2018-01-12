@@ -10,7 +10,7 @@ db_host = "localhost"
 db_user = "root"
 db_passwd = "IceCream!"
 
-sleep_time = 0.10*60
+sleep_time = 10*60
 address_list = [46000, 60050]
 
 

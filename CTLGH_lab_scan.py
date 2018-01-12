@@ -31,28 +31,67 @@ connect2db()
 cursor = conn.cursor ()
 dict_cursor = dict_conn.cursor ()
 
+dust_plot_json = {} #hold jsons for each device
+js_str = ''
+div_str = ''
 
 
-sql = """select concat("Date(",Year(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Month(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Day(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Hour(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Minute(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Second(DATE_SUB(recorded, INTERVAL 3 HOUR)) , ")") as fdat,
-reading
- from freezers.sensor_readings where device = 46000 order by recorded desc"""
+#get list of devices
+
+
+sql = "select * from freezers.sensor_list where in_use = 1 group by device order by device ;"
+dict_cursor.execute(sql)
+sensor_list = dict_cursor.fetchall()
+for  row_dict in sensor_list:
+  
+
+   sql = """select concat("Date(",Year(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Month(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Day(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Hour(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Minute(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Second(DATE_SUB(recorded, INTERVAL 3 HOUR)) , ")") as fdat,
+             reading
+             from freezers.sensor_readings where device = {dev} and recorded >= DATE_SUB(now(), INTERVAL {d} DAY) order by recorded desc """.format(dev = row_dict['device'], d = row_dict['plot_days'])
 
 
 
-cursor.execute(sql)
-plot_data = cursor.fetchall()
-dust_plot_json = json.dumps(plot_data)
+   n = cursor.execute(sql)
+   plot_data = cursor.fetchall()
+   #dust_plot_json[row_dict['device']] = json.dumps(plot_data)
+
+
+   if n > 1:
+
+      js_str+= """   
+
+
+      google.charts.setOnLoadCallback(draw{dev}Chart);
+
+
+      function draw{dev}Chart() {{
+
+        var dust_dat  = {dat}
+
+        dust_dat.unshift([ {{type: 'datetime'}},'{y}'])
+
+        var data = google.visualization.arrayToDataTable(dust_dat);
+
+        var options = {{
+          title: '{title}',
+          hAxis: {{ title: '{x}' }},
+          vAxis: {{ title: '{y}'}},
+          legend: 'none'
+        }};
+
+        var chart = new google.visualization.LineChart(document.getElementById('{dev}_div'));
+
+        chart.draw(data, options);
+      }}
 
 
 
+      """.format( dev = row_dict['device'], dat=json.dumps(plot_data), x = row_dict['x-axis_title'], y = row_dict['y-axis_title'], title = row_dict['plot_title'] )
 
-sql = """select concat("Date(",Year(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Month(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Day(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Hour(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Minute(DATE_SUB(recorded, INTERVAL 3 HOUR)), ", ", Second(DATE_SUB(recorded, INTERVAL 3 HOUR)) , ")") as fdat,
-reading
- from freezers.sensor_readings where device = 60050 order by recorded desc"""
-cursor.execute(sql)
-plot_data = cursor.fetchall()
-temp_plot_json = json.dumps(plot_data)
 
+      div_str += """  
+               <div id="{dev}_div" style="width: 900px; height: 500px;"></div>
+               """.format(dev = row_dict['device'])
 
 
 print """Content-Type: text/html
@@ -62,48 +101,13 @@ print """Content-Type: text/html
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript">
       google.charts.load('current', {'packages':['corechart']});
-      google.charts.setOnLoadCallback(drawDustChart);
-      google.charts.setOnLoadCallback(drawTempChart);
 
 
 
-  var dust_dat  = %s
-  dust_dat.unshift([ {type: 'datetime'}, 'Dust level'])
 
-      function drawDustChart() {
-        var data = google.visualization.arrayToDataTable(dust_dat);
+%s
 
-        var options = {
-          title: 'Dust levels (>1 micron) measured by Shinyei PPD42NJ',
-          hAxis: {title: 'Date/time'},
-          vAxis: {title: 'Dust'},
-          legend: 'none'
-        };
-
-        var chart = new google.visualization.LineChart(document.getElementById('dust_div'));
-
-        chart.draw(data, options);
-      }
-
-
-
-  var temp_dat  = %s
-  temp_dat.unshift([ {type: 'datetime'}, 'Temperature'])
-
-     function drawTempChart() {
-        var data = google.visualization.arrayToDataTable(temp_dat);
-
-        var options = {
-          title: 'Temperature',
-          hAxis: {title: 'Date/time'},
-          vAxis: {title: 'Temperatue deg C'},
-          legend: 'none'
-        };
-
-        var chart = new google.visualization.LineChart(document.getElementById('temp_div'));
-
-        chart.draw(data, options);
-      }
+ 
 
 
 
@@ -111,13 +115,14 @@ print """Content-Type: text/html
     </script>
   </head>
   <body>
-    <div id="dust_div" style="width: 900px; height: 500px;"></div>
-    <div id="temp_div" style="width: 900px; height: 500px;"></div>
+    
+
+%s
 
   </body>
 </html>
 
-""" % (dust_plot_json, temp_plot_json)
+""" % (js_str, div_str)
 
 
 
