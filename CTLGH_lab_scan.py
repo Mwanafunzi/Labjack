@@ -50,13 +50,16 @@ for  row_dict in sensor_list:
              from freezers.sensor_readings where device = {dev} and recorded >= DATE_SUB(now(), INTERVAL {d} DAY) order by recorded desc """.format(dev = row_dict['device'], d = row_dict['plot_days'])
 
 
-
    n = cursor.execute(sql)
-   plot_data = cursor.fetchall()
-   #dust_plot_json[row_dict['device']] = json.dumps(plot_data)
 
 
-   if n > 1:
+   if n >= 1:
+
+      plot_data = [[ {'type': 'datetime'},row_dict['y-axis_title']],]   #header items
+      for row in cursor.fetchall():
+        plot_data.append(row)                                           #then append each record. Annoyingly cannot dump whole result as it comes as a tuple not list
+                                                                        
+
 
       js_str+= """   
 
@@ -67,8 +70,6 @@ for  row_dict in sensor_list:
       function draw{dev}Chart() {{
 
         var dust_dat  = {dat}
-
-        dust_dat.unshift([ {{type: 'datetime'}},'{y}'])
 
         var data = google.visualization.arrayToDataTable(dust_dat);
 
