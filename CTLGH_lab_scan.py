@@ -10,9 +10,8 @@ import MySQLdb.cursors
 import json
 
 
-db_host = "localhost"
-db_user = "root"
-db_passwd = "IceCream!"
+import LN2config
+
 
 
 
