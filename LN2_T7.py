@@ -2,7 +2,7 @@
 
 # gets LN2-related information from a specific labjack
 
-# labjack is set to use extended function for average values from AIN0, AIN2 and AIN4.
+# labjack is set to use extended function for average values from AIN0, AIN2 
 # THese AIN's are also set to use signal as positive and adjacent channel as negative.
 
 #uses the "Deep Search" function for searching explicit IP ranges. 
@@ -11,6 +11,8 @@
 #And there are instructions about the IP syntax here:
 # https://labjack.com/support/software/api/ljm/constants/DeepSearchConfigs
 
+
+
 import time
 import datetime
 
@@ -18,25 +20,23 @@ import MySQLdb
 import MySQLdb.cursors
 
 from labjack import ljm
-# Open the labjack LabJack
-
 
 import LN2config
 
 
-write_interval = 30*60
-sleep_time = 25
+write_interval = 30*60 
+sleep_time = 10
 connect_wait_time = 10
 
 write_time = 0
 
 read_channels = {
-         '1TopPressure':         'AIN2',           # raw pressure input at the AIN. Actually ignored
-         '2Average_top_P':       'AIN2_EF_READ_A', # average using EF. This will be the the value used
-         '3BottomPressure':      'AIN0',           # raw input at the AIN. Actually ignored
-         '4Average_bottom_P':    'AIN0_EF_READ_A', # average pressure using EF. This will be the the value used
-         'raw4':                 'AIN4',
-         '5_O2':                 'USER_RAM0_F32',           # oxygen level %. This is put onto user RAM by a Lua script running on the T7. It is an average of a bunch of AIN4 values
+        # '1TopPressure':         'AIN2',           # raw pressure input at the AIN. Actually ignored
+         'Average_top_P':         'AIN2_EF_READ_A', # average using EF. This will be the the value used
+        # '3BottomPressure':      'AIN0',           # raw input at the AIN. Actually ignored
+         'Average_bottom_P':      'AIN0_EF_READ_A', # average pressure using EF. This will be the the value used
+        # 'raw4':                 'AIN4',
+         'O2':                   'USER_RAM0_F32',           # oxygen level %. This is put onto user RAM by a Lua script running on the T7. It is an average of a bunch of AIN4 values
          'shutoff':              'DIO0', 
          'door':                 'DIO1', 
          'plant':                'DIO2', 
@@ -46,6 +46,19 @@ read_channels = {
          'ambient':              'TEMPERATURE_AIR_K',
          'fan_0':                'DAC0',
          'fan_1':                'DAC1'}
+
+
+wobbles = {                      # changes that trigger a write
+         'Average_top_P':        0.1, 
+         'Average_bottom_P':     0.1,
+         'O2':                   0.1,            
+         'shutoff':              1, 
+         'door':                 1, 
+         'plant':                1, 
+         'vent_alarm':           1, 
+         'vent_valve':           1, 
+         'fan_0':                1,
+         'fan_1':                1}
 
 
 #######################################################  #####
@@ -72,11 +85,31 @@ def retry_cnct():   # loop to allow repeatred retries of cnxn. Why not built int
 ############################  #############
 
 
+def compare_results(resultset, last_resultset):
+  ## looks for a change in any paramter and triggers a write
+  ## returns False if no change or the cause of the write if change
+  trigger_list = []
+  for w in wobbles.keys():
+    if (abs(resultset[w] -  last_resultset[w]) >= wobbles[w]):
+      trigger_list.append(w)   #maybe multiple causes, add them here
+  if  len(trigger_list) >0:    
+    return ', '.join(trigger_list)  # convert array to string
+  else:
+    return False
+
+############################  ############# 
+
+
+
+change_detected = 0
+last_resultset = {}
+resultset = {}
+
 while 1:
 
   retry_cnct()
 
-  write_loop =   time.time() - write_time >  write_interval    
+  write_loop =   (time.time() - write_time >  write_interval) 
   read_ok = 1
 
   try:
@@ -119,12 +152,22 @@ while 1:
 
 
 
-  #compare_results(resultset, last_resultset)   # look for difference requiring a write
-  
-  if write_loop and read_ok:
+  if read_ok and 'vent_valve' in last_resultset: # kludgy way to see if last_resultset has been populated
+    change_detected = compare_results(resultset, last_resultset)   # look for difference requiring a write
+    if change_detected:
+      resultset['trigger'] = change_detected
+      print "***change detected", change_detected
+    else:
+      resultset['trigger'] = 'Time'
+
+  if 'trigger' not in resultset:
+      resultset['trigger'] = '1stRun'
+
+  if ((write_loop or change_detected) and read_ok):
+
        sql = """INSERT INTO `pressure` ( `analog0`, `analog1`, `O2`, `switch`, `fill_point`, `ambient`, `door`, `LN2_plant`, `fans_status`, `fans_2_status`, `cause`, `timestamp`, `vent_valve`, `vent_alarm`)
              VALUES
-            ( {2Average_top_P}, {4Average_bottom_P}, {5_O2}, {shutoff}, {fillpoint}, {ambient}, {door}, {plant}, {fan_0}, {fan_1}, 'Time', now(), {vent_valve}, {vent_alarm});""".format(**resultset)  
+            ( {Average_top_P}, {Average_bottom_P}, {O2}, {shutoff}, {fillpoint}, {ambient}, {door}, {plant}, {fan_0}, {fan_1}, '{trigger}', now(), {vent_valve}, {vent_alarm});""".format(**resultset)  
   
   
        print '**** writing to db....', 
@@ -132,6 +175,7 @@ while 1:
          cursor.execute(sql)
          write_time = time.time() 
          last_resultset = resultset   # remember what we just wrote
+         change_detected = 0
          print '....ok'
        except Exception, e:
 
