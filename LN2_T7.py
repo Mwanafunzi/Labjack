@@ -36,7 +36,7 @@ read_channels = {
          '3BottomPressure':      'AIN0',           # raw input at the AIN. Actually ignored
          '4Average_bottom_P':    'AIN0_EF_READ_A', # average pressure using EF. This will be the the value used
          'raw4':                 'AIN4',
-         '5_O2':                 'AIN4_EF_READ_A',           # oxygen level is this reading * 10
+         '5_O2':                 'USER_RAM0_F32',           # oxygen level %. This is put onto user RAM by a Lua script running on the T7. It is an average of a bunch of AIN4 values
          'shutoff':              'DIO0', 
          'door':                 'DIO1', 
          'plant':                'DIO2', 
@@ -96,24 +96,21 @@ while 1:
       result = ljm.eReadName(handle, address)
 
       if 'fillpoint' in item:
-        result =  (55.56*result) + 255.37 - 273.15
+        result =  (55.56*result) + 255.37 - 273.15    # convert external probe to degrees C
 
-      elif 'fans'  in item:
-        result = result < 3.5
+      elif 'fan_'  in item:
+        result = result < 3.5   # DAC voltage can be 0 - 5V. >3.5 indicates fan is off.
 
       elif 'Average' in item:
-         result *=  1000
+         result *=  1000         # convert volts to millivolts
 
-      elif 'O2' in item:
-         result *=  10
-
-      elif 'ambient' in item:
+      elif 'ambient' in item:    # convert internal sensor to degrees C
          result -= 273.15
 
       elif 'plant' in item:
-          result = not result # flip state
+          result = not result    # flip state. A high indicates plant NOT running
        
-      resultset[item] = result   #accumulate results in a dictionary
+      resultset[item] = result   #accumulate results in a dictionary  
 
       print " {:20} {:25} {:6.4f}".format(item, address, result)
   except Exception, e:
@@ -125,9 +122,9 @@ while 1:
   #compare_results(resultset, last_resultset)   # look for difference requiring a write
   
   if write_loop and read_ok:
-       sql = """INSERT INTO `pressure` ( `analog0`, `analog1`, `O2`, `switch`, `fill_point`, `ambient`, `door`, `LN2_plant`, `fan_0`, `fan_1`, `cause`, `timestamp`, `vent_valve`, `vent_alarm`)
+       sql = """INSERT INTO `pressure` ( `analog0`, `analog1`, `O2`, `switch`, `fill_point`, `ambient`, `door`, `LN2_plant`, `fans_status`, `fans_2_status`, `cause`, `timestamp`, `vent_valve`, `vent_alarm`)
              VALUES
-            ( {2Average_top_P}, {4Average_bottom_P}, {5_O2}, {shutoff}, {fillpoint}, {ambient}, {door}, {plant}, {fan_0}, {fan_0}, 'Time', now(), {vent_valve}, {vent_alarm});""".format(**resultset)  
+            ( {2Average_top_P}, {4Average_bottom_P}, {5_O2}, {shutoff}, {fillpoint}, {ambient}, {door}, {plant}, {fan_0}, {fan_1}, 'Time', now(), {vent_valve}, {vent_alarm});""".format(**resultset)  
   
   
        print '**** writing to db....', 
