@@ -68,7 +68,7 @@ while 1:
    write_loop =   time.time() - write_time >  write_interval    
 
 
-   sql = """SELECT ip as name, description, unitid, port,  temperature_wobble from freezer_units
+   sql = """SELECT ip as name, description, unitid, port_name,  temperature_wobble from freezer_units
           where in_use >0 and talkbox like '%T7' and INET_ATON(ip) IS  NULL order by ip;"""
    
    count = 0
@@ -104,12 +104,14 @@ while 1:
           open_device = sensor['name']
           print "   LabJack {} serial #: {}, ip {} ".format( sensor['name'], info[2],  ljm.numberToIP(info[3])),
 
-          address = sensor['port']
+          address = sensor['port_name']
 
           #result = ljm.eReadName(handle, address)
-          result = ljm.eReadAddress(handle, address, 3)
+          #result = ljm.eReadAddress(handle, address, 3)
+          result = ljm.eReadName(handle, address)
 
-          if address == 60050:
+
+          if address == 'TEMPERATURE_AIR_K':
             result = result  - 273.15
           #exit()
 
