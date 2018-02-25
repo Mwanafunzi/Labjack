@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 
-
 #reads T7 labjacks using deep search method
 
 # Needs JackPython: http://github.com/labjack/LabJackPython
@@ -15,14 +14,8 @@
 import MySQLdb
 import time
 import MySQLdb.cursors
-import json
-
-
-
 
 import LN2config
-
-
 
 write_interval = 30*60
 sleep_time = 0.10*60
@@ -56,17 +49,15 @@ import time
 # Open first found LabJack
 # see https://labjack.com/support/software/api/ljm/function-reference/ljmopen
 
+
+
 write_loop = 0
+last_temp = {}
 
-
-### get a list of T7's addressed by name. ie where talkbox contains 't7' and ip is not a valid ip
+### get a list of T7's addressed by name. ie where talkbox contains 't7' and ip is not a valid ip  
 while 1:
 
-   
-
-
    write_loop =   time.time() - write_time >  write_interval    
-
 
    sql = """SELECT ip as name, description, unitid, port_name,  temperature_wobble from freezer_units
           where in_use >0 and talkbox like '%T7' and INET_ATON(ip) IS  NULL order by ip;"""
@@ -97,9 +88,7 @@ while 1:
  
       try:
 
-
-
-          handle = ljm.openS("ANY", "ANY", sensor['name']) ## no problem if its already open LJM will know this and make instamnt cnxn
+          handle = ljm.openS("ANY", "ANY", sensor['name']) ## no problem if its already open LJM will know this and make instamnt cnxn  
           info = ljm.getHandleInfo(handle)
           open_device = sensor['name']
           print "   LabJack {} serial #: {}, ip {} ".format( sensor['name'], info[2],  ljm.numberToIP(info[3])),
@@ -110,20 +99,30 @@ while 1:
           #result = ljm.eReadAddress(handle, address, 3)
           result = ljm.eReadName(handle, address)
 
+          this_unit = sensor['unitid']
 
           if address == 'TEMPERATURE_AIR_K':
             result = result  - 273.15
           #exit()
+          print("Sensor id: {} Address: {}, value : {:.1f}".format(this_unit, address, result))
 
-          print("Sensor id: {} Address: {}, value : {}".format(sensor['unitid'], address, result))
-          sql = """INSERT INTO `freezer_log` ( `freezer`, `created`, `temp`) VALUES({a}, now(), {r});""".format( a = sensor['unitid'], r =result)
+          if this_unit in last_temp:    # if we  have a last_temp
+             wobbly = (abs(result -  last_temp[this_unit]) >= sensor['temperature_wobble'])
+             #print "Result", result,"last temperature", last_temp[this_unit], "wobbl is", abs(result -  last_temp[this_unit]),"this is ", wobbly
+          else:
+              wobbly = False
 
-          #print sql
-          if write_loop:
+          if write_loop or wobbly:
+            sql = """INSERT INTO `freezer_log` ( `freezer`, `created`, `temp`) VALUES({a}, now(), {r});""".format( a = this_unit, r =result)
+
             print 'writing to db'
+            if wobbly:
+              print '   **** wobble **** of {:.1f}'.format(abs(result -  last_temp[this_unit]))
             try:
               cursor.execute(sql)
-              write_time = time.time() 
+              if not wobbly:
+                write_time = time.time() #leave the normal write time unchanged - don't start a new delay from a wobble-triggered write
+              last_temp[this_unit] = result
             except Exception, e:
               print e
 
@@ -132,9 +131,3 @@ while 1:
          print "Failed to read from LJ or write to db",e
    time.sleep(sleep_time)
  
-
-
-
-
-
-
